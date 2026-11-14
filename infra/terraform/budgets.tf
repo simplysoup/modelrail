@@ -1,5 +1,6 @@
 # Billing budget: alerts at 50%, 90%, and 100% of the monthly amount.
-# Set on day 0, before any cluster exists. The default amount is $50.
+# Set on day 0, before any cluster exists. The default amount is $50 CAD
+# (the billing account is CAD; a USD amount is rejected with 400).
 # There is no free-trial credit left (already used up), so this is paid
 # spend. A budget never stops spending by itself; it
 # only alerts. The real cost control is `make down` after every session
@@ -22,7 +23,7 @@ resource "google_billing_budget" "modelrail" {
 
   amount {
     specified_amount {
-      currency_code = "USD"
+      currency_code = "CAD"
       units         = tostring(floor(var.monthly_budget_amount))
     }
   }
