@@ -1,0 +1,92 @@
+# MLflow tracking server. Portfolio project.
+# Backend store: Cloud SQL Postgres (private IP, same VPC).
+# Artifact store: gs://modelrail-modelrail-mlflow.
+#
+# Two values are only known after `terraform apply`, so they are NOT in
+# this file. Create them before applying this manifest (password from
+# Terraform state, never committed, never printed to a file):
+#   DB_PASS=$(terraform -chdir=infra/terraform show -json | python3 -c \
+#     "import json,sys; print([r['values']['result'] for r in json.load(sys.stdin)['values']['root_module']['resources'] if r['address']=='random_password.mlflow_db'][0])")
+#   DB_HOST=$(terraform -chdir=infra/terraform output -raw cloudsql_private_ip)
+#   kubectl create secret generic mlflow-db -n modelrail \
+#     --from-literal=password="$DB_PASS"
+#   kubectl create configmap mlflow-config -n modelrail \
+#     --from-literal=db_host="$DB_HOST"
+# Then: kubectl apply -k k8s/base  (this file is in the base list).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      serviceAccountName: modelrail-mlflow
+      containers:
+        - name: mlflow
+          image: ghcr.io/mlflow/mlflow:v2.20.1
+          args:
+            - server
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "5000"
+            - --backend-store-uri
+            - "postgresql://mlflow:$(MLFLOW_DB_PASSWORD)@$(MLFLOW_DB_HOST):5432/mlflow"
+            - --default-artifact-root
+            - "gs://modelrail-modelrail-mlflow"
+          env:
+            - name: MLFLOW_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: mlflow-config
+                  key: db_host
+            - name: MLFLOW_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-db
+                  key: password
+          ports:
+            - containerPort: 5000
+              name: http
+          resources:
+            requests:
+              cpu: "0.25"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+    - port: 5000
+      targetPort: 5000
+      name: http

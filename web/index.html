@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ModelRail - in-browser inference demo</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  #status { padding: 0.75rem; border: 1px solid #ccc; border-radius: 6px; background: #f7f7f7; }
+  #results { margin-top: 1rem; }
+  table { border-collapse: collapse; margin-top: 0.5rem; }
+  td, th { border: 1px solid #ccc; padding: 0.3rem 0.6rem; text-align: left; }
+  button { padding: 0.5rem 1rem; font-size: 1rem; }
+  .note { color: #555; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<h1>ModelRail in-browser demo</h1>
+<p>
+  Runs the quantized MobileNetV3-small CIFAR-10 model in your browser
+  with onnxruntime-web. No image leaves your machine. This is a
+  portfolio demo, not a production service.
+</p>
+<p>
+  <label for="file">Pick an image (a CIFAR-10 class works best):</label><br>
+  <input type="file" id="file" accept="image/*">
+  <button id="run" disabled>Run inference</button>
+</p>
+<div id="status">Loading model...</div>
+<div id="results"></div>
+<p class="note">
+  Model file: <code>model-int8.onnx</code> (expected next to this page).
+  If it is missing, this page says so instead of failing silently.
+  The model is produced by <code>train/export_onnx.py</code> and
+  <code>train/quantize.py</code>; it is not bundled with this repo.
+  Measured numbers live in <code>docs/BENCHMARKS.md</code>.
+</p>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+<script>
+const MODEL_URL = "model-int8.onnx";
+const CLASSES = ["airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"];
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+const runBtn = document.getElementById("run");
+const fileInput = document.getElementById("file");
+
+let session = null;
+let modelBytes = 0;
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+async function loadModel() {
+  try {
+    const head = await fetch(MODEL_URL, { method: "HEAD" });
+    if (!head.ok) throw new Error("HTTP " + head.status);
+    const size = head.headers.get("content-length");
+    modelBytes = size ? parseInt(size, 10) : 0;
+    const t0 = performance.now();
+    session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] });
+    const loadMs = performance.now() - t0;
+    setStatus("Model loaded in " + loadMs.toFixed(0) + " ms. Size: " +
+      (modelBytes ? (modelBytes / 1024 / 1024).toFixed(2) + " MB" : "unknown") +
+      ". Pick an image and run inference.");
+    runBtn.disabled = false;
+  } catch (err) {
+    setStatus("Model not available: " + err.message + ". " +
+      "Place model-int8.onnx next to this page (see train/quantize.py) and reload. " +
+      "Nothing is broken in the page itself; the model file is simply not here yet.");
+  }
+}
+
+// Resize to 32x32 and normalize with CIFAR-10 mean/std.
+async function imageToTensor(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = 32; canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0, 32, 32);
+  const data = ctx.getImageData(0, 0, 32, 32).data;
+  const mean = [0.4914, 0.4822, 0.4465];
+  const std = [0.2470, 0.2435, 0.2616];
+  const input = new Float32Array(3 * 32 * 32);
+  for (let i = 0; i < 32 * 32; i++) {
+    for (let c = 0; c < 3; c++) {
+      input[c * 32 * 32 + i] = (data[i * 4 + c] / 255 - mean[c]) / std[c];
+    }
+  }
+  return new ort.Tensor("float32", input, [1, 3, 32, 32]);
+}
+
+runBtn.addEventListener("click", async () => {
+  const file = fileInput.files[0];
+  if (!file) { setStatus("Pick an image first."); return; }
+  if (!session) { setStatus("Model is not loaded."); return; }
+  try {
+    const tensor = await imageToTensor(file);
+    const feeds = {};
+    feeds[session.inputNames[0]] = tensor;
+    const t0 = performance.now();
+    const out = await session.run(feeds);
+    const inferMs = performance.now() - t0;
+    const logits = out[session.outputNames[0]].data;
+    const ranked = Array.from(logits)
+      .map((v, i) => ({ label: CLASSES[i], score: v }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+    resultsEl.innerHTML = "<h2>Result</h2>" +
+      "<table><tr><th>Class</th><th>Score</th></tr>" +
+      ranked.map(r => "<tr><td>" + r.label + "</td><td>" + r.score.toFixed(3) + "</td></tr>").join("") +
+      "</table>" +
+      "<p>In-browser inference latency: <strong>" + inferMs.toFixed(1) + " ms</strong>. " +
+      "Model size: <strong>" + (modelBytes ? (modelBytes / 1024 / 1024).toFixed(2) + " MB" : "unknown") + "</strong>. " +
+      "First run includes warm-up; run it again for a steadier number.</p>";
+    setStatus("Done. Top prediction: " + ranked[0].label + ".");
+  } catch (err) {
+    setStatus("Inference failed: " + err.message);
+  }
+});
+
+loadModel();
+</script>
+</body>
+</html>

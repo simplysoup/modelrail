@@ -1,0 +1,37 @@
+# ModelRail - application requirements (train + serve)
+# Portfolio project. Nothing here is deployed to GCP yet.
+# Install the CPU-only torch wheel with:
+#   pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+# The default index also works for torch, but pulls the much larger CUDA build.
+# Python 3.11 or 3.12.
+
+# Training and model
+torch==2.5.1
+torchvision==0.20.1
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.6.0
+PyYAML==6.0.2
+Pillow==11.1.0
+
+# ONNX export, quantization, inference
+onnx==1.17.0
+onnxruntime==1.20.1
+
+# Experiment tracking (lazy import in train code; runs without a server)
+mlflow==2.20.1
+
+# Data validation
+pandera==0.21.0
+
+# Serving
+fastapi==0.115.6
+uvicorn==0.34.0
+pydantic==2.10.4
+prometheus-client==0.21.0
+
+# GCS path only (lazy import; never called unless a gs:// URI is configured)
+google-cloud-storage==2.19.0
+
+# Tests
+pytest==8.3.4

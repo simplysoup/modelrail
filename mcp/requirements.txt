@@ -1,0 +1,2 @@
+# ModelRail MCP server: standard library only, no dependencies.
+# Tests run with the stdlib unittest runner or pytest.

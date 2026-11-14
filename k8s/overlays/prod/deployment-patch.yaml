@@ -1,0 +1,20 @@
+# Prod overlay: champion model version, full resources.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modelrail-serve
+spec:
+  template:
+    spec:
+      containers:
+        - name: serve
+          env:
+            - name: MODEL_VERSION
+              value: champion
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"

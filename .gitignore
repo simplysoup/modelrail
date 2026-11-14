@@ -1,0 +1,47 @@
+# ModelRail .gitignore
+# Terraform state and local config (state holds secrets: never commit)
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Env and secrets (no credentials of any kind belong in this repo)
+.env
+.env.*
+*.pem
+*.key
+*-key.json
+*service-account*.json
+
+# MLflow local runs and data (DVC tracks data files; git tracks the code)
+mlruns/
+mlartifacts/
+data/raw/
+data/processed/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+
+# MCP audit log is local operational output, not source
+mcp/audit.log
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,80 @@
+# ModelRail hyperparameters and pipeline parameters.
+# Portfolio project. Single source of truth for every stage in dvc.yaml.
+# All values are read by train/, data/schemas/, and serve/ at run time.
+
+project:
+  name: modelrail
+  region: northamerica-northeast2
+  # Portfolio label, not a production claim.
+  status: portfolio
+
+data:
+  dataset: cifar10
+  num_classes: 10
+  image_size: 32
+  channels: 3
+  train_samples: 50000
+  test_samples: 10000
+  # CI smoke subset used by `dvc repro` on pull requests.
+  ci_subset_samples: 500
+  download_url: https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz
+  # Mean and std from the CIFAR-10 training set, per channel (R, G, B).
+  mean: [0.4914, 0.4822, 0.4465]
+  std: [0.2470, 0.2435, 0.2616]
+  val_fraction: 0.1
+  seed: 42
+  # Class-balance guardrails, enforced by data/schemas/schema.py.
+  # CIFAR-10 is balanced at 0.10 per class; fail outside this band.
+  min_class_share: 0.05
+  max_class_share: 0.20
+
+train:
+  model: mobilenet_v3_small
+  pretrained: true
+  epochs: 10
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0005
+  optimizer: adam
+  scheduler: cosine
+  num_workers: 2
+  # Checkpoint every N epochs and at the end of every epoch in CI mode.
+  checkpoint_every_epochs: 1
+  resume: true
+  # Early stopping on validation accuracy, in epochs without improvement.
+  early_stopping_patience: 3
+
+evaluate:
+  # Gate thresholds. The model gate in CI fails unless all of these pass.
+  # champion_accuracy is filled in by the gate job from the MLflow registry.
+  min_accuracy: 0.80
+  champion_tolerance: 0.01
+  onnx_pytorch_max_abs_diff: 0.001
+  # Mean absolute difference between PyTorch and ONNX logits on the eval set.
+  onnx_pytorch_max_mean_diff: 0.0005
+
+export:
+  onnx_opset: 13
+  onnx_output: model.onnx
+  quantized_output: model-int8.onnx
+
+quantize:
+  method: static
+  # Static quantization with calibration on a held-out subset.
+  calibration_samples: 1000
+  per_channel: true
+  reduce_range: false
+
+serve:
+  # Latency and size gates for the model gate and the load test.
+  p95_latency_ms_cpu: 100
+  max_model_size_mb: 10
+  max_batch_size: 32
+  # Model version is set at deploy time from the MLflow registry version.
+  model_version: candidate
+
+drift:
+  psi_threshold: 0.2
+  ks_threshold: 0.1
+  # CronJob schedule is defined in k8s/base/drift-cronjob.yaml.
+  check_schedule: "0 6 * * *"

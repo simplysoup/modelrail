@@ -1,0 +1,184 @@
+# ModelRail merge-to-main pipeline: build, train, gate, canary, promote.
+# This is the release pipeline. Every step after the build is a gate:
+# a failed gate stops the pipeline and nothing is promoted.
+# Argo Rollouts is the canary mechanism; if it is ever removed, the
+# fallback is a plain rolling update plus the smoke-test job (see the
+# canary job comments). No step here publishes anything outside GCP.
+name: Release pipeline
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: northamerica-northeast2
+  AR_REPO: modelrail
+  WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+  WIF_SERVICE_ACCOUNT: ${{ vars.WIF_SERVICE_ACCOUNT }}
+  IMAGE: northamerica-northeast2-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/modelrail/serving
+
+jobs:
+  build-and-push:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push
+        id: meta
+        run: |
+          IMAGE_TAG="${IMAGE}:${GITHUB_SHA}"
+          echo "image=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          # Dockerfile builds from the repo root (it COPYs
+          # requirements.txt and serve/app.py).
+          docker buildx build --push -f serve/Dockerfile -t "${IMAGE_TAG}" -t "${IMAGE}:latest" .
+
+  train:
+    name: Launch training Job on GKE
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: modelrail
+          location: ${{ env.GCP_REGION }}
+      - name: Apply training Job
+        run: |
+          kubectl apply -f k8s/base/training-job.yaml -n modelrail
+          kubectl wait --for=condition=complete --timeout=3600s job/modelrail-train -n modelrail
+
+  model-gate:
+    name: Model gate
+    runs-on: ubuntu-latest
+    needs: train
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+      # Wiring note, not yet implemented: the train Job writes its
+      # artifacts (checkpoint.pt, model-int8.onnx, eval.json) inside the
+      # pod under /app/models/run, and this job runs on ubuntu-latest,
+      # so it cannot see them. Before this pipeline runs for real, the
+      # train Job must upload models/run/* to the DVC GCS bucket on
+      # completion, and a download step must be added here (gsutil cp
+      # to models/run/ and data/processed/) before the gate checks.
+      # train/gate.py fails loudly when its input files are missing,
+      # so the pipeline fails instead of passing silently until then.
+      # Gate thresholds live in data/params.yaml; the flags below
+      # override them. train/gate.py enforces all four rules, and the
+      # pipeline fails if any one fails. The MLflow run is looked up
+      # by git SHA: every training run logs git_sha as an MLflow param.
+      #   - accuracy >= champion accuracy - 0.01
+      #   - ONNX vs PyTorch outputs match within 1e-4
+      #   - p95 CPU latency under 100 ms
+      #   - model size under 20 MB
+      - name: Gate checks
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+          CHAMPION_ACCURACY: ${{ vars.CHAMPION_ACCURACY }}
+        run: |
+          python train/gate.py \
+            --git-sha "${{ github.sha }}" \
+            --checkpoint models/run/checkpoint.pt \
+            --onnx models/run/model-int8.onnx \
+            --onnx-fp32 models/run/model.onnx \
+            --eval-json models/run/eval.json \
+            --data data/processed \
+            --min-accuracy-delta 0.01 \
+            --max-onnx-mismatch 1e-4 \
+            --max-p95-latency-ms 100 \
+            --max-model-size-mb 20
+
+  register-candidate:
+    name: Register model as candidate
+    runs-on: ubuntu-latest
+    needs: model-gate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install mlflow
+      - name: Register candidate
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+        run: |
+          python -m mcp.register_model \
+            --git-sha "${{ github.sha }}" \
+            --alias candidate
+
+  canary:
+    name: Canary deploy with Argo Rollouts
+    runs-on: ubuntu-latest
+    needs: register-candidate
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: modelrail
+          location: ${{ env.GCP_REGION }}
+      - name: Deploy canary (10% -> 50% -> 100%)
+        run: |
+          kubectl argo rollouts set image rollout/modelrail-serve \
+            serve="${{ needs.build-and-push.outputs.image }}" -n modelrail
+          kubectl argo rollouts promote rollout/modelrail-serve -n modelrail --full || true
+      # Argo Rollouts runs the analysis template (Prometheus: error
+      # rate and latency) at each step and rolls back automatically on
+      # failure. Fallback if Rollouts is removed: plain rolling update
+      # (kubectl rollout restart) plus the smoke-test job below.
+      - name: Smoke test
+        run: |
+          kubectl run smoke-test --rm -i --restart=Never -n modelrail \
+            --image=curlimages/curl -- \
+            curl -fsS http://modelrail-serve/healthz
+
+  promote:
+    name: Promote candidate to champion
+    runs-on: ubuntu-latest
+    needs: canary
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install mlflow
+      - name: Promote to champion
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+        run: |
+          python -m mcp.register_model \
+            --git-sha "${{ github.sha }}" \
+            --alias champion

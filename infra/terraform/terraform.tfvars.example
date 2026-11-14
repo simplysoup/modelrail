@@ -1,0 +1,15 @@
+# ModelRail - example variables. Copy to terraform.tfvars and fill in
+# real values. terraform.tfvars is gitignored; never commit real ids.
+# No real GCP project id, billing account, or email is committed here.
+
+project_id           = "REPLACE-ME-project-id"
+region               = "northamerica-northeast2"
+zone                 = "northamerica-northeast2-a"
+environment          = "dev"
+cluster_name         = "modelrail"
+billing_account_id   = "REPLACE-ME-billing-account-id"
+monthly_budget_amount = 50
+budget_alert_emails  = ["REPLACE-ME@example.com"]
+
+# Spot training is off by default. See docs/adr/ADR-006-spot-training.md.
+enable_spot_node_pool = false

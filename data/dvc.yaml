@@ -1,0 +1,90 @@
+# ModelRail DVC pipeline: prepare -> train -> evaluate -> export
+# Portfolio project. Reproduce with `dvc repro` from the repo root.
+# Remote is GCS (gs://modelrail-modelrail-dvc). No DVC command in this repo is run
+# against real GCS by this agent; the remote is configuration only until
+# the GCP project exists. Local repro works with the default local cache.
+# Params are read from data/params.yaml; every stage logs its git SHA and
+# data hash to MLflow in train/train.py.
+
+stages:
+  prepare:
+    cmd: python -m data.prepare --params data/params.yaml --out data/processed
+    deps:
+      - data/prepare.py
+      - data/schemas/schema.py
+      - data/params.yaml
+    params:
+      - data.mean
+      - data.std
+      - data.val_fraction
+      - data.seed
+      - data.min_class_share
+      - data.max_class_share
+    outs:
+      - data/processed/train
+      - data/processed/val
+      - data/processed/test
+      - data/processed/metadata.parquet:
+          cache: true
+    metrics:
+      - data/processed/prepare-metrics.json:
+          cache: false
+
+  train:
+    cmd: python -m train.train --params data/params.yaml --data data/processed --out models/run
+    deps:
+      - train/train.py
+      - train/checkpoint.py
+      - data/processed/train
+      - data/processed/val
+      - data/params.yaml
+    params:
+      - train.model
+      - train.epochs
+      - train.batch_size
+      - train.learning_rate
+      - train.weight_decay
+      - train.seed
+    outs:
+      - models/run/checkpoint.pt:
+          cache: true
+      - models/run/manifest.json:
+          cache: true
+    metrics:
+      - models/run/metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python -m train.evaluate --params data/params.yaml --checkpoint models/run/checkpoint.pt --data data/processed --out models/run/eval.json
+    deps:
+      - train/evaluate.py
+      - models/run/checkpoint.pt
+      - data/processed/test
+      - data/params.yaml
+    params:
+      - evaluate.min_accuracy
+      - evaluate.onnx_pytorch_max_abs_diff
+    metrics:
+      - models/run/eval.json:
+          cache: false
+
+  export:
+    cmd: >-
+      python -m train.export_onnx --params data/params.yaml
+      --checkpoint models/run/checkpoint.pt --out models/run/model.onnx
+      && python -m train.quantize --params data/params.yaml
+      --model models/run/model.onnx --data data/processed
+      --out models/run/model-int8.onnx
+    deps:
+      - train/export_onnx.py
+      - train/quantize.py
+      - models/run/checkpoint.pt
+      - data/params.yaml
+    outs:
+      - models/run/model.onnx:
+          cache: true
+      - models/run/model-int8.onnx:
+          cache: true
+    metrics:
+      - models/run/export-metrics.json:
+          cache: false

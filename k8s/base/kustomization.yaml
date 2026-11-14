@@ -1,0 +1,25 @@
+# ModelRail Kustomize base. Portfolio project, nothing deployed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: modelrail
+commonLabels:
+  app.kubernetes.io/part-of: modelrail
+resources:
+  - namespace.yaml
+  - mlflow.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - training-job.yaml
+  - drift-cronjob.yaml
+  # Argo Rollouts is a stretch goal: if the Rollouts controller is not
+  # installed, remove rollout.yaml and analysis-template.yaml from this
+  # list and the plain Deployment in deployment.yaml is the fallback
+  # (rolling update + smoke-test Job). See k8s/README.md.
+  - rollout.yaml
+  - analysis-template.yaml
+images:
+  - name: modelrail-serve
+    newName: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve
+    newTag: candidate

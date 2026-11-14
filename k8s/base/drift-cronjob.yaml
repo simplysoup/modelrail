@@ -1,0 +1,59 @@
+# ModelRail drift check CronJob. Portfolio project.
+# Compares production input statistics (PSI/KS on pixel and embedding
+# stats, collected from /metrics and request logs) against the training
+# reference. Past the thresholds in data/params.yaml (drift.psi_threshold,
+# drift.ks_threshold) it emits a drift metric and triggers a retrain via
+# repository_dispatch. Schedule: daily 06:00, matching params.yaml.
+# The drift-check script itself is a small job image built from train/
+# plus a drift module; the CronJob contract (env, thresholds, exit code)
+# is what this manifest pins. Exit code 2 means drift detected.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: modelrail-drift-check
+  labels:
+    app: modelrail-drift
+spec:
+  schedule: "0 6 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: modelrail-drift
+        spec:
+          restartPolicy: Never
+          serviceAccountName: modelrail-drift
+          containers:
+            - name: drift-check
+              image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
+              imagePullPolicy: IfNotPresent
+              command: ["python", "-m", "train.drift_check"]
+              args:
+                - --params
+                - /app/data/params.yaml
+                - --reference
+                - gs://modelrail-modelrail-dvc/reference/train-stats.json
+                - --production
+                - http://modelrail-serve.modelrail.svc.cluster.local/metrics
+              env:
+                - name: DRIFT_PSI_THRESHOLD
+                  value: "0.2"
+                - name: DRIFT_KS_THRESHOLD
+                  value: "0.1"
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "1000m"
+                  memory: "1Gi"
+              securityContext:
+                runAsNonRoot: true
+                runAsUser: 10001
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]

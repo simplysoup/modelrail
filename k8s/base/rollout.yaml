@@ -1,0 +1,102 @@
+# ModelRail canary Rollout (Argo Rollouts). Portfolio project.
+# Canary steps: 10% -> 50% -> 100%, with a Prometheus analysis run at
+# each step. A failed analysis aborts the rollout and rolls back to the
+# stable version automatically. Thresholds are in analysis-template.yaml.
+# FALLBACK: if the Argo Rollouts controller is not installed, do not apply
+# this file. Remove rollout.yaml and analysis-template.yaml from
+# kustomization.yaml and use the plain Deployment in deployment.yaml
+# (rolling update + smoke-test Job) instead. Only one of Deployment or
+# Rollout should manage the modelrail-serve pods at a time.
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: modelrail-serve
+  labels:
+    app: modelrail-serve
+spec:
+  replicas: 2
+  strategy:
+    canary:
+      canaryService: modelrail-serve-canary
+      stableService: modelrail-serve
+      steps:
+        - setWeight: 10
+        - pause: {duration: 5m}
+        - analysis:
+            templates:
+              - templateName: modelrail-canary-analysis
+        - setWeight: 50
+        - pause: {duration: 5m}
+        - analysis:
+            templates:
+              - templateName: modelrail-canary-analysis
+        - setWeight: 100
+      trafficRouting:
+        istio:
+          virtualService:
+            name: modelrail-serve
+            routes:
+              - primary
+  selector:
+    matchLabels:
+      app: modelrail-serve
+  template:
+    metadata:
+      labels:
+        app: modelrail-serve
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: modelrail-serve
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: serve
+          image: modelrail-serve:candidate
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: MODEL_PATH
+              value: /models/model-int8.onnx
+            - name: MODEL_VERSION
+              value: candidate
+          volumeMounts:
+            - name: model
+              mountPath: /models
+              readOnly: true
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: model
+          emptyDir: {}

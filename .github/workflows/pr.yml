@@ -1,0 +1,119 @@
+# ModelRail PR checks: lint, test, scan, plan, and a small data check.
+# Nothing here deploys anything. The Terraform plan step needs WIF
+# credentials (read-only plan); the DVC repro runs on a 500-sample
+# subset so a PR stays fast.
+name: PR checks
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: northamerica-northeast2
+  WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+  WIF_SERVICE_ACCOUNT: ${{ vars.WIF_SERVICE_ACCOUNT }}
+
+jobs:
+  lint-and-test:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest
+          pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+      - name: Ruff
+        run: ruff check train/ serve/ mcp/ data/
+      - name: Pytest
+        run: pytest mcp/tests/ tests/ -q
+
+  docker-lint-and-scan:
+    name: Dockerfile lint and image scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: serve/Dockerfile
+      - name: Build image for scanning
+        # Dockerfile builds from the repo root (it COPYs requirements.txt
+        # and serve/app.py), so the build context is ".", not serve/.
+        run: docker build -f serve/Dockerfile -t modelrail:pr-${{ github.sha }} .
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: modelrail:pr-${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+
+  terraform:
+    name: Terraform fmt, validate, plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive infra/terraform/
+      - name: Terraform init
+        run: terraform -chdir=infra/terraform init
+      - name: Terraform validate
+        run: terraform -chdir=infra/terraform validate
+      - name: Terraform plan
+        run: >
+          terraform -chdir=infra/terraform plan
+          -var="project_id=${{ env.GCP_PROJECT_ID }}"
+          -var="billing_account_id=${{ vars.GCP_BILLING_ACCOUNT_ID }}"
+          -no-color
+      - name: TFLint
+        uses: terraform-linters/setup-tflint@v4
+      - run: tflint --chdir=infra/terraform --recursive
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/terraform
+          framework: terraform
+
+  data-check:
+    name: Data schema check and small DVC repro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install DVC and deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install "dvc[gs]" pandera pytest
+          pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+      - name: Schema and sanity checks (prepare stage)
+        # data.prepare runs every check in data/schemas/schema.py
+        # (class balance, shape, dtype, no leakage between splits).
+        # Any violation raises and fails the build.
+        run: python -m data.prepare --params data/params.yaml --out data/processed
+      - name: DVC repro on 500-sample subset
+        # The subset size is data.ci_subset_samples (500) in
+        # data/params.yaml, honoured by data/prepare.py --subset.
+        # Runs the real prepare stage (schema checks included) on the
+        # capped splits, so a PR stays fast.
+        run: python -m data.prepare --params data/params.yaml --out data/processed --subset

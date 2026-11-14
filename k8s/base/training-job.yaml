@@ -1,0 +1,63 @@
+# ModelRail training Job. Portfolio project.
+# Runs train.py on a Spot node pool (toleration + nodeSelector below).
+# Checkpoints go to the GCS URI in CHECKPOINT_URI; the manifest-as-
+# commit-point protocol in train/checkpoint.py means a preempted pod
+# resumes from the last committed manifest, not a half-written file.
+# The Job is launched by CI on merge to main, and by the drift retrain
+# trigger. It never runs on the serving node pool.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: modelrail-train
+  labels:
+    app: modelrail-train
+spec:
+  backoffLimit: 2
+  # Spot preemption is expected, not exceptional: the Job retries, and
+  # train.py resumes from the last checkpoint manifest.
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app: modelrail-train
+    spec:
+      restartPolicy: Never
+      serviceAccountName: modelrail-train
+      nodeSelector:
+        cloud.google.com/gke-spot: "true"
+      tolerations:
+        - key: cloud.google.com/gke-spot
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+        - name: train
+          image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "train.train"]
+          args:
+            - --params
+            - /app/data/params.yaml
+            - --data
+            - /app/data/processed
+            - --out
+            - /app/models/run
+            - --checkpoint-uri
+            - gs://modelrail-modelrail-dvc/checkpoints/run
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow.modelrail.svc.cluster.local:5000
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]

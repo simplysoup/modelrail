@@ -1,0 +1,23 @@
+# ModelRail prod overlay. Portfolio project, nothing deployed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: modelrail
+resources:
+  - ../../base
+commonLabels:
+  environment: prod
+images:
+  - name: modelrail-serve
+    newTag: champion
+patches:
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: modelrail-serve
+  - path: deployment-patch.yaml
+    target:
+      kind: Rollout
+      name: modelrail-serve
+replicas:
+  - name: modelrail-serve
+    count: 3

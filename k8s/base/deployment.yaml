@@ -1,0 +1,91 @@
+# ModelRail serving Deployment (plain rolling-update fallback).
+# Portfolio project. This Deployment is used when Argo Rollouts is absent.
+# When Rollouts is installed, rollout.yaml replaces this Deployment as the
+# serving workload: same image, probes, resources, and labels, but with
+# canary steps 10% -> 50% -> 100% and automatic rollback. Only one of the
+# two should be applied at a time; kustomize overlays choose which.
+# See k8s/README.md for the fallback rule.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modelrail-serve
+  labels:
+    app: modelrail-serve
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: modelrail-serve
+  template:
+    metadata:
+      labels:
+        app: modelrail-serve
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Workload Identity: the pod uses its own least-privilege service
+      # account, defined in infra/. No JSON service-account keys anywhere.
+      serviceAccountName: modelrail-serve
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: serve
+          image: modelrail-serve:candidate
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: MODEL_PATH
+              value: /models/model-int8.onnx
+            - name: MODEL_VERSION
+              value: candidate
+          # Model file mounted from GCS via a CSI volume in prod; in dev
+          # this is an emptyDir populated by an init container or a local
+          # test model. The app also supports MODEL_GCS_URI instead.
+          volumeMounts:
+            - name: model
+              mountPath: /models
+              readOnly: true
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          # Graceful shutdown: SIGTERM starts uvicorn drain, and the
+          # preStop hook gives in-flight requests time to finish within
+          # terminationGracePeriodSeconds above.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: model
+          emptyDir: {}

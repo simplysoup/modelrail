@@ -1,0 +1,40 @@
+# ModelRail canary analysis template (Argo Rollouts + Prometheus).
+# Portfolio project. Runs at the 10% and 50% canary steps.
+# Failure of any metric aborts the rollout and rolls back automatically.
+# Thresholds: error rate under 1% and p95 latency under 100 ms, matching
+# the latency SLO and the serve gate in data/params.yaml.
+# Why these numbers: 1% error is 10x the expected baseline error rate for
+# a healthy ONNX service, so a real regression trips it while normal
+# jitter does not; 100 ms p95 matches the serve.p95_latency_ms_cpu gate.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: modelrail-canary-analysis
+spec:
+  args:
+    - name: service-name
+      value: modelrail-serve-canary
+  metrics:
+    - name: error-rate
+      successCondition: result[0] < 0.01
+      failureLimit: 1
+      interval: 30s
+      count: 4
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(modelrail_predict_requests_total{status!="ok"}[2m]))
+            /
+            sum(rate(modelrail_predict_requests_total[2m]))
+    - name: p95-latency
+      successCondition: result[0] < 0.1
+      failureLimit: 1
+      interval: 30s
+      count: 4
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95,
+              sum(rate(modelrail_predict_latency_seconds_bucket[2m])) by (le))

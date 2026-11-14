@@ -1,0 +1,11 @@
+# DVC remote configuration for ModelRail.
+# Portfolio project. The GCS remote is configuration only: no DVC command
+# in this repo has been run against real GCS, and project modelrail exists, billing linked, single paid run pending.
+# The bucket name matches infra/ (owned by another agent); if infra renames
+# the bucket, update the url here and in docs.
+[core]
+    remote = gcs-remote
+['remote "gcs-remote"']
+    url = gs://modelrail-modelrail-dvc
+['remote "local"']
+    url = /tmp/modelrail-dvc-cache
