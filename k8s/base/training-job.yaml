@@ -33,6 +33,9 @@ spec:
           # data first, then runs these args. (command would replace
           # the entrypoint and skip data prep.)
           args:
+            - python
+            - -m
+            - train.train
             - --params
             - /app/data/params.yaml
             - --data
