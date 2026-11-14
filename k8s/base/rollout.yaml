@@ -31,12 +31,10 @@ spec:
             templates:
               - templateName: modelrail-canary-analysis
         - setWeight: 100
-      trafficRouting:
-        istio:
-          virtualService:
-            name: modelrail-serve
-            routes:
-              - primary
+      # No traffic-routing provider (no Istio/NGINX in this cluster):
+      # Argo implements the weights by scaling the canary and stable
+      # ReplicaSets, and the stable/canary Services select each set.
+      # The analysis runs at 10% and 50% still gate promotion.
   selector:
     matchLabels:
       app: modelrail-serve
@@ -49,7 +47,7 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: "/metrics"
     spec:
-      serviceAccountName: modelrail-serve
+      serviceAccountName: serving
       terminationGracePeriodSeconds: 30
       containers:
         - name: serve

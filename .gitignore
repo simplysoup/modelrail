@@ -45,3 +45,6 @@ mcp/audit.log
 .DS_Store
 .idea/
 .vscode/
+
+# Terraform plan files are local only
+infra/terraform/tfplan*

@@ -28,7 +28,7 @@ terraform {
   # The bucket name is intentionally a placeholder: no real GCP resource
   # name is committed in this repo.
   backend "gcs" {
-    bucket = "REPLACE-ME-modelrail-tfstate"
+    bucket = "modelrail-tfstate"
     prefix = "modelrail/terraform/state"
   }
 }

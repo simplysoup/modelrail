@@ -26,7 +26,7 @@ spec:
             app: modelrail-drift
         spec:
           restartPolicy: Never
-          serviceAccountName: modelrail-drift
+          serviceAccountName: drift
           containers:
             - name: drift-check
               image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest

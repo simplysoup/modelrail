@@ -1,8 +1,10 @@
 # ModelRail training Job. Portfolio project.
-# Runs train.py on a Spot node pool (toleration + nodeSelector below).
-# Checkpoints go to the GCS URI in CHECKPOINT_URI; the manifest-as-
-# commit-point protocol in train/checkpoint.py means a preempted pod
-# resumes from the last committed manifest, not a half-written file.
+# Runs on Autopilot capacity: no Spot node pool exists on this cluster
+# (a Spot pool cannot attach to Autopilot; see ADR-006), so there is no
+# nodeSelector or toleration here. Checkpoints go to the GCS URI in
+# CHECKPOINT_URI; the manifest-as-commit-point protocol in
+# train/checkpoint.py means a preempted pod resumes from the last
+# committed manifest, not a half-written file.
 # The Job is launched by CI on merge to main, and by the drift retrain
 # trigger. It never runs on the serving node pool.
 apiVersion: batch/v1
@@ -13,7 +15,7 @@ metadata:
     app: modelrail-train
 spec:
   backoffLimit: 2
-  # Spot preemption is expected, not exceptional: the Job retries, and
+  # Preemption is expected, not exceptional: the Job retries, and
   # train.py resumes from the last checkpoint manifest.
   activeDeadlineSeconds: 7200
   template:
@@ -22,19 +24,14 @@ spec:
         app: modelrail-train
     spec:
       restartPolicy: Never
-      serviceAccountName: modelrail-train
-      nodeSelector:
-        cloud.google.com/gke-spot: "true"
-      tolerations:
-        - key: cloud.google.com/gke-spot
-          operator: Equal
-          value: "true"
-          effect: NoSchedule
+      serviceAccountName: training
       containers:
         - name: train
           image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
           imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "train.train"]
+          # No command override: the image entrypoint prepares the
+          # data first, then runs these args. (command would replace
+          # the entrypoint and skip data prep.)
           args:
             - --params
             - /app/data/params.yaml

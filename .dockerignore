@@ -1,0 +1,23 @@
+# Docker build context exclusions for ModelRail.
+# The Dockerfiles build from the repo root; without this the context
+# includes provider binaries and caches. Keep it to source only.
+.git
+.github
+.terraform
+infra/terraform/.terraform
+infra/terraform/*.tfplan
+infra/terraform/*.tfstate*
+__pycache__
+.pytest_cache
+mlruns
+mlartifacts
+data/raw
+data/processed
+models
+*.onnx
+*.pt
+*.pth
+*.ckpt
+.venv
+venv
+.DS_Store

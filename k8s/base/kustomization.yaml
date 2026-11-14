@@ -6,17 +6,16 @@ commonLabels:
   app.kubernetes.io/part-of: modelrail
 resources:
   - namespace.yaml
+  - serviceaccounts.yaml
   - mlflow.yaml
-  - deployment.yaml
   - service.yaml
   - hpa.yaml
   - pdb.yaml
   - training-job.yaml
   - drift-cronjob.yaml
-  # Argo Rollouts is a stretch goal: if the Rollouts controller is not
-  # installed, remove rollout.yaml and analysis-template.yaml from this
-  # list and the plain Deployment in deployment.yaml is the fallback
-  # (rolling update + smoke-test Job). See k8s/README.md.
+  # The Argo Rollouts controller is installed, so rollout.yaml is the
+  # serving workload. deployment.yaml is the fallback only: do not apply
+  # both, they select the same pods. See k8s/README.md.
   - rollout.yaml
   - analysis-template.yaml
 images:

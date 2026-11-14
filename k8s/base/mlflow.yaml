@@ -29,7 +29,7 @@ spec:
       labels:
         app: mlflow
     spec:
-      serviceAccountName: modelrail-mlflow
+      serviceAccountName: mlflow
       containers:
         - name: mlflow
           image: ghcr.io/mlflow/mlflow:v2.20.1

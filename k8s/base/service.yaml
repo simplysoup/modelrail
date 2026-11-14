@@ -8,6 +8,20 @@ spec:
   type: ClusterIP
   selector:
     app: modelrail-serve
+---
+# Canary Service: Argo Rollouts points this at the canary ReplicaSet
+# during a rollout. The stable Service above keeps pointing at the
+# stable ReplicaSet. Argo manages both Services' selectors.
+apiVersion: v1
+kind: Service
+metadata:
+  name: modelrail-serve-canary
+  labels:
+    app: modelrail-serve
+spec:
+  type: ClusterIP
+  selector:
+    app: modelrail-serve
   ports:
     - name: http
       port: 80

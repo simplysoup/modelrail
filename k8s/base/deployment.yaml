@@ -32,7 +32,7 @@ spec:
     spec:
       # Workload Identity: the pod uses its own least-privilege service
       # account, defined in infra/. No JSON service-account keys anywhere.
-      serviceAccountName: modelrail-serve
+      serviceAccountName: serving
       terminationGracePeriodSeconds: 30
       containers:
         - name: serve
