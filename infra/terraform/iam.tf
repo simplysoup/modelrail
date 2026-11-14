@@ -45,9 +45,13 @@ resource "google_service_account" "drift" {
 }
 
 # Training: read DVC data, write checkpoints and MLflow artifacts.
+# The checkpoint URI is gs://<dvc bucket>/checkpoints/run, so the
+# training SA needs objectAdmin on the DVC bucket, not just read.
+# (objectViewer alone made epoch 0 fail at the checkpoint save
+# with 403 storage.objects.create denied.)
 resource "google_storage_bucket_iam_member" "training_dvc_read" {
   bucket = google_storage_bucket.dvc.name
-  role   = "roles/storage.objectViewer"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.training.email}"
 }
 
