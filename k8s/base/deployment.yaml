@@ -40,7 +40,7 @@ spec:
           # rewrite images in a Rollout, and this keeps the fallback
           # identical to the Rollout).
           image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve:candidate
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http

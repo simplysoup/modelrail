@@ -60,7 +60,7 @@ spec:
           # transformer does not rewrite images inside a Rollout CRD,
           # so the short name would be pulled from Docker Hub and fail.
           image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve:candidate
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http

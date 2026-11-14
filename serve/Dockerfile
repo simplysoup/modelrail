@@ -22,7 +22,8 @@ COPY --from=builder /install /usr/local
 COPY serve/app.py ./serve/app.py
 RUN groupadd -r modelrail && useradd -r -g modelrail -d /app modelrail \
     && mkdir -p /models /tmp/modelrail-model \
-    && chown -R modelrail:modelrail /app /models /tmp/modelrail-model
+    && chown -R modelrail:modelrail /app /models /tmp/modelrail-model \
+    && chmod -R a+rX /app
 USER modelrail
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

@@ -25,7 +25,8 @@ COPY train/entrypoint.sh ./train/entrypoint.sh
 RUN chmod 755 ./train/entrypoint.sh \
     && groupadd -r modelrail && useradd -r -g modelrail -d /app modelrail \
     && mkdir -p /app/data/processed /app/models/run \
-    && chown -R modelrail:modelrail /app
+    && chown -R modelrail:modelrail /app \
+    && chmod -R a+rX /app
 USER modelrail
 ENTRYPOINT ["/app/train/entrypoint.sh"]
 CMD ["python", "-m", "train.train", "--params", "/app/data/params.yaml", "--data", "/app/data/processed", "--out", "/app/models/run"]
