@@ -42,6 +42,11 @@ spec:
     metadata:
       labels:
         app: modelrail-serve
+        # Kustomize commonLabels do not reach a CRD pod template, so
+        # the part-of label must be here explicitly: Argo rejects the
+        # Rollout when the stable/canary Services carry a label the
+        # pod template lacks.
+        app.kubernetes.io/part-of: modelrail
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
