@@ -44,6 +44,10 @@ spec:
           env:
             - name: MLFLOW_TRACKING_URI
               value: http://mlflow.modelrail.svc.cluster.local:5000
+            - name: TORCH_HOME
+              value: /tmp/torch-hub
+            - name: HOME
+              value: /tmp
           resources:
             requests:
               cpu: "2"

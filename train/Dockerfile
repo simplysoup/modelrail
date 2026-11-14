@@ -13,7 +13,9 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    TORCH_HOME=/tmp/torch-hub \
+    HOME=/tmp
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY train/ ./train/
