@@ -22,7 +22,7 @@ COPY data/schemas/ ./data/schemas/
 COPY data/prepare.py ./data/prepare.py
 COPY data/__init__.py ./data/__init__.py
 COPY train/entrypoint.sh ./train/entrypoint.sh
-RUN chmod +x ./train/entrypoint.sh \
+RUN chmod 755 ./train/entrypoint.sh \
     && groupadd -r modelrail && useradd -r -g modelrail -d /app modelrail \
     && mkdir -p /app/data/processed /app/models/run \
     && chown -R modelrail:modelrail /app

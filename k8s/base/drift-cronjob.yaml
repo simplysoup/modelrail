@@ -30,7 +30,7 @@ spec:
           containers:
             - name: drift-check
               image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: Always
               command: ["python", "-m", "train.drift_check"]
               args:
                 - --params

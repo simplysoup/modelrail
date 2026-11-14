@@ -33,6 +33,10 @@ spec:
       containers:
         - name: mlflow
           image: ghcr.io/mlflow/mlflow:v2.20.1
+          # The mlflow image has no entrypoint that runs `mlflow`;
+          # without command, args are execed as a binary and fail
+          # with "server: executable file not found in $PATH".
+          command: ["mlflow"]
           args:
             - server
             - --host

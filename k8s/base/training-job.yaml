@@ -28,7 +28,7 @@ spec:
       containers:
         - name: train
           image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           # No command override: the image entrypoint prepares the
           # data first, then runs these args. (command would replace
           # the entrypoint and skip data prep.)
