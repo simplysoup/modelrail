@@ -130,9 +130,8 @@ resource "google_service_account_iam_member" "drift_wi" {
 }
 
 # Workload Identity Federation for GitHub Actions. The pool trusts the
-# GitHub OIDC issuer; the provider restricts tokens to this repo only.
-# Replace REPLACE-ME-modelrail with the real repo (owner/repo) before
-# first use. No JSON keys: GitHub mints a short-lived OIDC token per
+# GitHub OIDC issuer; the provider restricts tokens to this repo only
+# (simplysoup/modelrail). No JSON keys: GitHub mints a short-lived OIDC token per
 # run and exchanges it for a GCP access token.
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "github-actions"
@@ -155,7 +154,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.ref"        = "assertion.ref"
   }
 
-  attribute_condition = "assertion.repository == 'REPLACE-ME-modelrail'"
+  attribute_condition = "assertion.repository == 'simplysoup/modelrail'"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -168,5 +167,5 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 resource "google_service_account_iam_member" "ci_wif" {
   service_account_id = google_service_account.ci.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/REPLACE-ME-modelrail"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/simplysoup/modelrail"
 }

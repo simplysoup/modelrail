@@ -91,7 +91,7 @@ resource "google_monitoring_notification_channel" "email" {
 }
 
 locals {
-  notification_channels = length(var.budget_alert_emails) > 0 ? [google_monitoring_notification_channel.email[0].id] : []
+  notification_channels = length(var.budget_alert_emails) > 0 ? [google_monitoring_notification_channel.email[0].name] : []
 }
 
 # Fast-burn alert: error rate above 5% for 5 minutes. This is the
