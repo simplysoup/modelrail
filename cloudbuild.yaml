@@ -1,0 +1,26 @@
+# ModelRail Cloud Build: build both images from the repo root.
+# The Dockerfiles live in subdirs and COPY from the root, so the
+# build context must be the repo root. Run:
+#   gcloud builds submit --config cloudbuild.yaml .
+# Both images are pushed to the Artifact Registry repo created by
+# Terraform (northamerica-northeast2-docker.pkg.dev/modelrail/modelrail).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - serve/Dockerfile
+      - -t
+      - northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve:candidate
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - train/Dockerfile
+      - -t
+      - northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
+      - .
+images:
+  - northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve:candidate
+  - northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/train:latest
