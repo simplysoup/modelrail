@@ -32,7 +32,9 @@ spec:
       serviceAccountName: mlflow
       containers:
         - name: mlflow
-          image: ghcr.io/mlflow/mlflow:v2.20.1
+          # Custom image (mlflow/Dockerfile): upstream mlflow image
+          # plus psycopg2-binary, which the Postgres backend needs.
+          image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/mlflow:latest
           # The mlflow image has no entrypoint that runs `mlflow`;
           # without command, args are execed as a binary and fail
           # with "server: executable file not found in $PATH".

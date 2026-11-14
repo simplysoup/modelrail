@@ -56,7 +56,10 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: serve
-          image: modelrail-serve:candidate
+          # Full registry path, not the short name: kustomize's images
+          # transformer does not rewrite images inside a Rollout CRD,
+          # so the short name would be pulled from Docker Hub and fail.
+          image: northamerica-northeast2-docker.pkg.dev/modelrail/modelrail/serve:candidate
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
