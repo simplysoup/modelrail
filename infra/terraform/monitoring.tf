@@ -1,3 +1,45 @@
+# The serve app exposes Prometheus metrics; the alert policies and the
+# dashboard below read them as Cloud Monitoring custom metrics. Those
+# metric types do not exist until a descriptor is created, so define
+# them here first. The alert policies depend on the descriptors.
+resource "google_monitoring_metric_descriptor" "predict_requests_total" {
+  project      = var.project_id
+  type         = "custom.googleapis.com/modelrail/predict_requests_total"
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  unit         = "1"
+  description  = "Total /predict requests served, by status."
+  display_name = "ModelRail prediction requests"
+
+  labels {
+    key         = "status"
+    value_type  = "STRING"
+    description = "Request outcome: ok, model_unavailable, or error."
+  }
+}
+
+resource "google_monitoring_metric_descriptor" "predict_errors_total" {
+  project      = var.project_id
+  type         = "custom.googleapis.com/modelrail/predict_errors_total"
+  metric_kind  = "CUMULATIVE"
+  value_type   = "INT64"
+  unit         = "1"
+  description  = "Total /predict requests that errored."
+  display_name = "ModelRail prediction errors"
+}
+
+resource "google_monitoring_metric_descriptor" "predict_latency_ms" {
+  project      = var.project_id
+  type         = "custom.googleapis.com/modelrail/predict_latency_ms"
+  # DISTRIBUTION value type: the p95 alert uses ALIGN_PERCENTILE_95,
+  # which the API rejects on a GAUGE/DOUBLE metric.
+  metric_kind  = "GAUGE"
+  value_type   = "DISTRIBUTION"
+  unit         = "ms"
+  description  = "Per-request /predict latency in milliseconds."
+  display_name = "ModelRail prediction latency"
+}
+
 # Cloud Monitoring: dashboard plus alert policies for the SLOs in
 # docs/SLOs.md. Availability SLO 99%, latency SLO p95 under 100 ms.
 # Alerts fire on error-budget burn, not on single spikes, so a brief
@@ -124,6 +166,8 @@ resource "google_monitoring_alert_policy" "high_error_rate" {
     content   = "Prediction error rate above 5% for 5 minutes. Check the canary status and the model gate results. Runbook: docs/DRILLS.md."
     mime_type = "text/markdown"
   }
+
+  depends_on = [google_monitoring_metric_descriptor.predict_errors_total]
 }
 
 # Latency SLO burn: p95 above 100 ms for 10 minutes.
@@ -156,6 +200,8 @@ resource "google_monitoring_alert_policy" "high_latency" {
     content   = "p95 prediction latency above the 100 ms SLO for 10 minutes. Check pod CPU, HPA state, and model version. Runbook: docs/DRILLS.md."
     mime_type = "text/markdown"
   }
+
+  depends_on = [google_monitoring_metric_descriptor.predict_latency_ms]
 }
 
 # Availability: serving pods unavailable. Uses the Kubernetes
