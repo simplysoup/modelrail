@@ -42,5 +42,11 @@ spec:
         prometheus:
           address: http://prometheus.monitoring.svc.cluster.local:9090
           query: |
+            # `or vector(0)` keeps the query returning a value (0) when
+            # there are no latency buckets yet in the window; without it
+            # histogram_quantile returns NaN, which fails the
+            # successCondition even though no request was slow. Once
+            # traffic is flowing the query returns the real p95.
             histogram_quantile(0.95,
               sum(rate(modelrail_predict_latency_seconds_bucket[2m])) by (le))
+            or vector(0)
