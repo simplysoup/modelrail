@@ -1,7 +1,7 @@
 """Register a ModelRail model version and set an MLflow alias.
 
 Used by the release pipeline (.github/workflows/main.yml) after the
-model gate passes. Finds the training run by its git SHA tag, creates
+model gate passes. Finds the training run by its git SHA param, creates
 a model version from that run's artifact URI, and sets the requested
 alias (candidate or champion).
 
@@ -44,7 +44,7 @@ def mlflow_request(base, path, payload=None):
 def find_run_by_git_sha(base, git_sha):
     result = mlflow_request(base, "/api/2.0/mlflow/runs/search", {
         "experiment_ids": ["0"],
-        "filter": "tags.git_sha = '%s'" % git_sha,
+        "filter": "params.git_sha = '%s'" % git_sha,
         "max_results": 1,
         "order_by": ["attributes.start_time DESC"],
     })
