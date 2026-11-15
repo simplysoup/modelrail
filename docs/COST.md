@@ -55,12 +55,12 @@ Session Nov 14, 2026 (evening, ~14:00-22:00 EST): single paid run.
 Cluster (GKE Autopilot) + Cloud SQL db-f1-micro + GCS + Artifact
 Registry + Cloud Build, region northamerica-northeast2. Training Job
 ran 27 minutes; serving ran for the canary (about 2 hours of pod
-time across the session). Billed amount is being confirmed from the
-GCP billing console; the figure below will be updated with it.
+time across the session). Billed total, read from the GCP billing
+console Nov 14 ~22:21 EST: CA$0.26.
 
 | Date | Session | Billed (CAD) | Notes |
 | --- | --- | --- | --- |
-| 2026-11-14 | Single paid run, ~8 h of infra uptime | (pending console check) | GKE Autopilot + Cloud SQL + Cloud Build + GCS + Artifact Registry. Budget $50 CAD/month; no alert fired. |
+| 2026-11-14 | Single paid run, ~8 h of infra uptime | CA$0.26 | GKE $0.13, Networking $0.09, Cloud SQL $0.03 (usage $0.72, savings -$0.46). No charges for Cloud Build, GCS, or Artifact Registry. Budget $50 CAD/month; no alert fired. Billing lags, so a small amount for the final hours before teardown (Nov 14 ~22:11 EST) may appear later; the infrastructure is deleted, so no further usage accrues. |
 
 ## Teardown proof
 
