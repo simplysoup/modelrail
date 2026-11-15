@@ -74,6 +74,16 @@ def main():
     artifact_uri = run["info"]["artifact_uri"].rstrip("/")
     source = artifact_uri + "/" + MODEL_PATH
 
+    # A model version needs its registered model to exist first; create it
+    # (a no-op when it already exists).
+    try:
+        mlflow_request(base, "/api/2.0/mlflow/registered-models/create", {
+            "name": args.model,
+        })
+    except SystemExit as exc:
+        if "RESOURCE_ALREADY_EXISTS" not in str(exc):
+            raise
+
     version = mlflow_request(base, "/api/2.0/mlflow/model-versions/create", {
         "name": args.model,
         "source": source,
