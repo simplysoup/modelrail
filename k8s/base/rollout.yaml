@@ -67,6 +67,8 @@ spec:
           env:
             - name: MODEL_PATH
               value: /models/model-int8.onnx
+            - name: MODEL_GCS_URI
+              value: gs://modelrail-modelrail-mlflow/1/f122b620bd944880812cc6ee0d36c73a/artifacts/model/model-int8.onnx
             - name: MODEL_VERSION
               value: candidate
           volumeMounts:
