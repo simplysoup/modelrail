@@ -64,18 +64,22 @@ GCP billing console; the figure below will be updated with it.
 
 ## Teardown proof
 
-TODO: after each session, run the commands below and paste the
-output here. The proof is a resource listing showing nothing running.
+Session Nov 14, 2026, torn down the same night (terraform destroy,
+finished ~22:11 EST). Verified after the destroy, all via gcloud:
 
-```sh
-gcloud projects list --filter="projectId:REPLACE-ME-project-id"
-gcloud container clusters list --project REPLACE-ME-project-id
-gcloud sql instances list --project REPLACE-ME-project-id
-gcloud storage buckets list --project REPLACE-ME-project-id
-gcloud artifacts repositories list --project REPLACE-ME-project-id --location northamerica-northeast2
-```
+- GKE clusters: 0
+- Cloud SQL instances: 0
+- GCS buckets: 0 (DVC, MLflow, Cloud Build, and tfstate buckets all deleted)
+- Artifact Registry repositories: 0
+- Terraform state: 0 resources (destroy complete)
+- Service accounts: only the Compute Engine default remains; the temporary modelrail-run service account was deleted, and its local key file was deleted.
+- VPS: ~/.kube-modelrail-config, ~/modelrail-k8s, ~/bin/kubectl all removed.
+- Network: only the project default VPC remains; modelrail-vpc deleted.
 
-Expected result after `make down`: no clusters, no SQL instances.
-The GCS buckets and Artifact Registry repository are deleted by
-`terraform destroy` as well (they are managed resources); if any
-remain, delete them by hand and note it here.
+Two destroy hiccups, both fixed by hand and noted for the next
+run: the DVC and MLflow buckets had to be emptied before terraform
+could delete them (no force_destroy set), and the Cloud SQL user
+could not be dropped while its database had objects, so the instance
+was deleted directly and the SQL resources removed from state; the
+private VPC peering then had to be deleted directly before the
+service networking connection would release.
