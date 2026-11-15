@@ -42,15 +42,19 @@ def mlflow_request(base, path, payload=None):
 
 
 def find_run_by_git_sha(base, git_sha):
+    # The training run lives in the modelrail-cifar10 experiment (id "1"),
+    # not the Default experiment ("0"), so resolve the experiment by name.
+    exp = mlflow_request(base, "/api/2.0/mlflow/experiments/get-by-name?experiment_name=modelrail-cifar10")
+    experiment_id = exp["experiment"]["experiment_id"]
     result = mlflow_request(base, "/api/2.0/mlflow/runs/search", {
-        "experiment_ids": ["0"],
+        "experiment_ids": [experiment_id],
         "filter": "params.git_sha = '%s'" % git_sha,
         "max_results": 1,
         "order_by": ["attributes.start_time DESC"],
     })
     runs = result.get("runs", [])
     if not runs:
-        raise SystemExit("no MLflow run found with git_sha tag " + git_sha)
+        raise SystemExit("no MLflow run found with git_sha param " + git_sha)
     return runs[0]
 
 
