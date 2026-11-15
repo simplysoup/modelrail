@@ -75,6 +75,11 @@ spec:
             - name: model
               mountPath: /models
               readOnly: true
+            # /tmp must be writable: the app downloads the model from
+            # MODEL_GCS_URI to /tmp/modelrail-model.onnx at startup, and
+            # readOnlyRootFilesystem makes the image /tmp read-only.
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: "500m"
@@ -107,4 +112,6 @@ spec:
               drop: ["ALL"]
       volumes:
         - name: model
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
