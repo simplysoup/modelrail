@@ -155,12 +155,26 @@ class GCSCheckpointStore:
             "size_bytes": len(data),
             "generation": checkpoint_blob.generation,
         }
-        # Manifest is the commit point. if_generation_match=0 means this
-        # write only succeeds if no manifest object exists yet, so a
-        # concurrent writer cannot overwrite a committed manifest.
-        self._blob("manifest.json").upload_from_string(
+        # Manifest is the commit point. It is a compare-and-swap: write
+        # only if the manifest still has the generation we read (0 when
+        # none exists yet), so a concurrent writer cannot silently
+        # overwrite a committed manifest. The previous code always used
+        # if_generation_match=0, which made every save after the first
+        # fail with 412 Precondition Failed.
+        manifest_blob = self._blob("manifest.json")
+        try:
+            manifest_blob.reload()
+            expected_generation = manifest_blob.generation
+        except Exception as exc:
+            from google.api_core import exceptions as gcs_exceptions
+
+            if isinstance(exc, gcs_exceptions.NotFound):
+                expected_generation = 0
+            else:
+                raise
+        manifest_blob.upload_from_string(
             json.dumps(manifest, indent=2, sort_keys=True),
-            if_generation_match=0,
+            if_generation_match=expected_generation,
         )
         return manifest
 
