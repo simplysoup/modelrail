@@ -51,12 +51,16 @@ is not a bill.
 
 ## Actual billed figures
 
-TODO: fill in after the first real session. Record the billed amount
-from the GCP billing console, the session length, and what ran.
+Session Nov 14, 2026 (evening, ~14:00-22:00 EST): single paid run.
+Cluster (GKE Autopilot) + Cloud SQL db-f1-micro + GCS + Artifact
+Registry + Cloud Build, region northamerica-northeast2. Training Job
+ran 27 minutes; serving ran for the canary (about 2 hours of pod
+time across the session). Billed amount is being confirmed from the
+GCP billing console; the figure below will be updated with it.
 
-| Date | Session | Billed (USD) | Notes |
+| Date | Session | Billed (CAD) | Notes |
 | --- | --- | --- | --- |
-| (none yet) | | | Nothing deployed yet |
+| 2026-11-14 | Single paid run, ~8 h of infra uptime | (pending console check) | GKE Autopilot + Cloud SQL + Cloud Build + GCS + Artifact Registry. Budget $50 CAD/month; no alert fired. |
 
 ## Teardown proof
 
